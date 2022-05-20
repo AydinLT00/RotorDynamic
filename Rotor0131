@@ -1,0 +1,373 @@
+%======== using Lalanne RotorDynamic Book finite element analysis - Direct Methode ========
+
+n = 5;                   % Number of toltal Nodes
+L_tot = 5; % [m]       % Total length of shaft
+L = L_tot/n;             % Length Of each node
+r_s = 0.2;              % shaft radius
+rho_s = 7800;            % shaft density
+E = 2e11;                % Young Modules
+
+omega = 1;
+
+% ============== SHAFT ================
+pi = 3.1415;
+S = pi*r_s^2;             % Shaft Cross section Area
+I = pi*r_s^4/4;
+
+M_ref = [156    0     0     -22*L   54    0     0      13*L;
+         0      156   22*L   0      0     54   -13*L   0;
+         0      22*L  4*L^2  0      0     13*L -3*L^2  0;
+        -22*L   0     0      4*L^2 -13*L  0     0     -3*L^2;
+         54     0     0     -13*L   156   0     0      22*L;
+         0      54    13*L   0      0     156  -22*L   0;
+         0     -13*L -3*L^2  0      0    -22*L  4*L^2  0;
+         13*L   0     0     -3*L^2  22*L  0     0      4*L^2]*rho_s*S*L/420
+
+M_s = [36   0    0     -3*L   -36   0       0     -3*L;
+       0    36   3*L    0      0   -36      3*L    0;
+       0    3*L  4*L^2  0      0   -3*L    -L^2    0;
+      -3*L  0    0      4*L^2  3*L  0       0     -L^2;
+      -36   0    0      3*L    36   0       0      3*L;
+       0   -36  -3*L    0      0    36     -3*L    0;
+       0    3*L -L^2    0      0   -3*L     4*L^2  0;
+      -3*L  0    0     -L^2    3*L  0       0      4*L^2;]*rho_s*I/(30*L)
+     
+M = zeros(n*4);
+
+for k = 0:n
+    if 1+k*4 < n*4 - n
+        for i = 0:7
+            for j = 0:7
+              M(1+k*4+i,1+k*4+j) = M(1+k*4+i,1+k*4+j) + M_ref(1+i,1+j) + M_s(1+i,1+j);
+            end
+        end
+    end
+end
+M
+% ============== DISK ================
+D_d = 3.4;                                 % Disk Diameter
+r_d = D_d/2;                               % Disk Radius
+b_d = 0.3;                                % Disk Width
+rho_d = 7800;                              % Disk Density
+V_d = b_d*pi*D_d^2/4;                      % Disk Volume
+M_D = rho_d*V_d;                           % Disk Mass
+I_Dx = 0.25*M_D*r_d^2  +  (1/12)*M_D*b_d^2;  % Disk Inertia
+I_Dy = 0.5*M_D*r_d^2;
+
+n_d = 3;                                   % Number Of Node(s) Which Disk is Located
+M_disk = [M_D;M_D;I_Dx;I_Dx].*eye(4);      % Disk Mass Matrix
+
+k = n_d - 1;
+if 1+k*4 < n*4
+    for i = 0:3
+        for j = 0:3
+            M(1+k*4+i,1+k*4+j)= M(1+k*4+i,1+k*4+j) + M_disk(1+i,1+j);
+        end
+    end
+end
+
+
+% ============== SHAFT AND DISK DAMPING ================
+C_disk = [0 0 0    0;
+          0 0 0    0;
+          0 0 0   -I_Dy;
+          0 0 I_Dy 0]*omega;
+      
+C_ref = [0   -36  -3*L    0      0    36     -3*L    0;
+         36   0    0     -3*L   -36   0       0     -3*L;
+         3*L  0    0     -4*L^2 -3*L  0       0      L^2;
+         0    3*L  4*L^2  0      0   -3*L    -L^2    0;
+         0    36   3*L    0      0   -36      3*L    0;
+        -36   0    0      3*L    36   0       0      3*L;
+         3*L  0    0      L^2   -3*L  0       0     -4*L^2;
+         0    3*L -L^2    0      0   -3*L     4*L^2  0]*(rho_s*I*omega/(15*L))
+  
+C = zeros(n*4);
+for k = 0:n
+    if 1+k*4 < n*4 - n
+        for i = 0:7
+            for j = 0:7
+              C(1+k*4+i,1+k*4+j)=C(1+k*4+i,1+k*4+j)+C_ref(1+i,1+j);
+            end
+        end
+    end
+end      
+      
+k = n_d - 1;
+if 1+k*4 < n*4
+    for i = 0:3
+        for j = 0:3
+            C(1+k*4+i,1+k*4+j)= C(1+k*4+i,1+k*4+j) + C_disk(1+i,1+j);
+        end
+    end
+end
+% ============== SHAFT STIFFNESS ================
+a = 0;
+K_C = [12   0    0        -6*L      -12     0     0        -6*L;
+       0    12   6*L       0         0     -12    6*L       0;
+       0    6*L (4+a)*L^2  0         0     -6*L  (2-a)*L^2  0;
+      -6*L  0    0        (4+a)*L^2  6*L    0     0        (2-a)*L^2;
+      -12   0    0         6*L       12     0     0         6*L;
+       0   -12  -6*L       0         0      12   -6*L       0;
+       0    6*L (2-a)*L^2  0         0     -6*L  (4+a)*L^2  0;
+      -6*L  0    0        (2-a)*L^2  6*L    0     0        (4+a)*L^2;]*E*I/((1+a)*L^3)
+  
+F = 1;      
+K_F = [36   0    0     -3*L   -36   0       0     -3*L;
+       0    36   3*L    0      0   -36      3*L    0;
+       0    3*L  4*L^2  0      0   -3*L    -L^2    0;
+      -3*L  0    0      4*L^2  3*L  0       0     -L^2;
+      -36   0    0      3*L    36   0       0      3*L;
+       0   -36  -3*L    0      0    36     -3*L    0;
+       0    3*L -L^2    0      0   -3*L     4*L^2  0;
+      -3*L  0    0     -L^2    3*L  0       0      4*L^2;]*F/(30*L)
+
+K = zeros(n*4);
+for k = 0:n
+    if 1+k*4 < n*4 - n
+        for i = 0:7
+            for j = 0:7
+              K(1+k*4+i,1+k*4+j)=K(1+k*4+i,1+k*4+j)+K_C(1+i,1+j)+K_F(1+i,1+j);
+            end
+        end
+    end
+end
+
+%% ============== BEARINGS AND SEALS ================
+kxx=8e7;
+kxz=-1e7;
+kzx=-6e7;
+kzz=10e7;
+cxx=8e3;
+cxz=-3e3;
+czx=-3e3;
+czz=12e3;
+K_bearing =-[kxx 0 kxz 0;
+             0   0 0   0;
+             kzx 0 kzz 0;
+             0   0 0   0];
+
+C_bearing =-[cxx 0 cxz 0;
+             0   0 0   0;
+             czx 0 czz 0;
+             0   0 0   0];
+         
+
+n_bearings = [1 5];
+
+for bearing = n_bearings
+k = bearing - 1;
+if 1+k*4 < n*4
+    for i = 0:3
+        for j = 0:3
+            K(1+k*4+i,1+k*4+j)= K(1+k*4+i,1+k*4+j) + K_bearing(1+i,1+j);
+        end
+    end
+end
+k = bearing - 1;
+if 1+k*4 < n*4
+    for i = 0:3
+        for j = 0:3
+            C(1+k*4+i,1+k*4+j)= C(1+k*4+i,1+k*4+j) + C_bearing(1+i,1+j);
+        end
+    end
+end
+end
+landa=M\K;
+[Eivec,Eival] = eig(landa)
+[Eival_sorted, ind] = sort(diag(Eival),'ascend');
+Eivec_sorted = Eivec(:,ind);
+
+for i = 1:n*4
+    nat_freq(i) = sqrt(Eival_sorted(i));
+end
+
+mode_shape = zeros(n*4);
+
+for j = 1:n*4
+    for i = 1:n*4
+        mode_shape(i,j) = Eivec_sorted(i,j);
+    end
+end
+
+u = zeros(n,n*4);
+for j = 1:n*4
+    for i=0:n-1
+        u(i+1,j) = real(mode_shape(i*4 + 1,j));
+    end
+end
+v = zeros(n,n*4);
+for j = 1:n*4
+    for i=0:n-1
+        v(i+1,j) = real(mode_shape(i*4 + 2,j));
+    end
+end
+
+
+M_diag_test = zeros(n*4);
+for j = 1:n*4
+    for i = 1:n*4
+        M_diag_test(i,j)=transpose(mode_shape(:,i))*M*mode_shape(:,j);
+    end
+end
+
+K_diag_test = zeros(n*4);
+for j = 1:n*4
+    for i = 1:n*4
+        K_diag_test(i,j)=transpose(mode_shape(:,i))*K*mode_shape(:,j);
+    end
+end
+
+C_diag_test = zeros(n*4);
+for j = 1:n*4
+    for i = 1:n*4
+        C_diag_test(i,j)=transpose(mode_shape(:,i))*C*mode_shape(:,j);
+    end
+end
+
+syms omega
+assume(omega,'real')
+% C_diag_test = C_diag_test*omega;
+C = C*omega;
+
+
+syms lan  % lan = 1/r
+A = [zeros(n*4)  M;M  C];
+B = [M  zeros(n*4);zeros(n*4)  -K];
+% X = [r*delta; delta]
+
+% eqn = det(A - (lan).*B);
+% vpa(eqn,2)
+
+S = solve(vpa(eqn,2),lan);
+clear w
+for omega= 0:50:2500   % in rad/s
+    S_new = subs(S,'omega',omega);
+    landa = vpa(S_new);
+    landa_new = sort(imag(1./landa),'ascend');
+    w(:,round(omega/50) + 1) = (landa_new);
+    F = w./(2*pi);
+end
+% [eigvector, eigvalue]=eig(A - (lan).*B)
+omega= 0:50:2500;
+plot(omega,F)        % Colision With y-axis (F) verified using (F0 = nat_freq/2pi)
+grid on
+hold on 
+plot(omega,omega, '-.')
+plot(omega,0.5*omega, '-.')
+title('Campbell Diagram')
+xlabel('OMEGA (rpm)')
+ylabel('Frequency (Hz)')
+hold off
+% 
+% t = 1:n;
+% for i = 1:n*4
+%     plot3(t,u(:,i),v(:,i)); grid on;hold on
+% end
+% hold off
+
+% for omega= 0:500:25000   % in RPM
+%     A_new = subs(A,'omega',omega);
+%     [eigvec_new, eigval_new]=eig(A_new)
+% end
+
+% test_A = vpa(A,2);
+% test_B = vpa(B,2);
+% clear w F
+% for omega= 0:50:2500   % in rad/s
+%     test_A_new = subs(test_A,'omega',omega);
+%     [V_new,D_new]=eig(test_A_new/test_B);
+%     sorted = sort(imag(1./diag(D_new)),'ascend')
+%     w(:,round(omega/50) + 1) = sorted;
+%     F = w./(2*pi);
+% end
+% % [eigvector, eigvalue]=eig(A - (lan).*B)
+% omega= 0:50:2500;
+% plot(omega,F)        % Colision With y-axis (F) verified using (F0 = nat_freq/2pi)
+% grid on
+% hold on 
+% plot(omega,omega, '-.')
+% plot(omega,0.5*omega, '-.')
+% title('Campbell Diagram')
+% xlabel('OMEGA (rpm)')
+% ylabel('Frequency (Hz)')
+% hold off
+
+% test_A = subs(test_A,'omega',500);
+% [V_new,D_new]=eig(test_A/test_B);
+% [D_new_sorted, ind] = sort(diag(D_new),'ascend');          % D_new_sorted is the same as landa(for getting r just use 1./D_new_sorted)
+% V_new_sorted = V_new(:,ind);                               % V_new_sorted is Delta(/_\)
+%%
+
+% i = 20
+% t = 0:0.1:300;
+% r = 1./D_new_sorted;
+% R = real(V_new_sorted(1,i))
+% R = vpa(R,10)
+% I = imag(V_new_sorted(1,i))
+% I = vpa(I)
+% omeg = imag(r(i))
+% omeg = vpa(omeg)
+% realr = real(r(i))
+% realr = vpa(realr)
+% u = 2*exp(realr*t).*((R)*cos(omeg*t) - I*sin(omeg*t));
+% plot(t,u)
+
+test_A = vpa(A,2);
+test_B = vpa(B,2);
+omega = 1000;
+test_A_new = subs(test_A,'omega',omega);
+[V_new,D_new]=eig(test_A_new/test_B);
+[D_new_sorted,ind] = sort(diag(D_new),'ascend')
+w_sorted = sort(imag(1./diag(D_new)),'ascend')
+w(:,round(omega/50) + 1) = w_sorted;
+F = w./(2*pi);
+V_new_sorted = V_new(:,ind);
+
+
+r = diag(1./D_new);
+R = real(V_new);
+I = imag(V_new);
+omeg = imag(r);
+realr = real(r);
+
+syms t
+assume(t,'real')
+C = sym('C',[n*8 1])
+inc = 0;diff_inc =0;
+for i = 1:2:39
+    inc_ref = 2*exp(realr(i)*t)*(C(i)*R(:,i)*cos(omeg(i)*t) - C(i+1)*I(:,i)*sin(omeg(i)*t));
+    inc = inc + inc_ref;
+    diff_inc_ref = 2*realr(i)*exp(realr(i)*t)*(C(i)*R(:,i)*cos(omeg(i)*t) - C(i+1)*I(:,i)*sin(omeg(i)*t)) + 2*exp(realr(i)*t)*(-C(i)*R(:,i)*omeg(i)*sin(omeg(i)*t) - C(i+1)*I(:,i)*omeg(i)*cos(omeg(i)*t));
+    diff_inc = diff_inc + diff_inc_ref;
+end
+
+
+% delta is :
+%    /\
+%   /  \
+%  /    \
+% /______\
+
+% smalldelta = 2*exp(- 0.27135559009098417626218499157224).*t*(- 0.000000000000000001459302150027880574804706332751)*cos(0.096745027444584332754876659899459.*t) + 0.00000000000000000000000000000047150371347302952820169992051354*sin(0.096745027444584332754876659899459.*t)
+
+q_0 = 100*ones(20,1);
+q_0 = 0.0001*[0;0;1;0;1;1;1;0;0;0;1;0;0;0;1;1;1;1;0;1];
+q_dot_0 = 0.0*ones(20,1);
+
+inc_0 = subs(inc,'t',0);
+diff_inc_0 = subs(diff_inc,'t',0);
+
+eqn_1 = q_0 == inc_0(21:40);
+eqn_2 = q_dot_0 == diff_inc_0(21:40);
+% vpasolve(eqn_1,eqn_2)
+
+
+for i=0:19
+C(2*i+1);
+end
+
+[C1,C11,C13,C15,C17,C19,C21,C23,C25,C27,C29,C3,C31,C33,C35,C37,C39,C5,C7,C9]=vpasolve(eqn_1)
+eqn_2 = subs(eqn_2,{'C1','C11','C13','C15','C17','C19','C21','C23','C25','C27','C29','C3','C31','C33','C35','C37','C39','C5','C7','C9'},{C1,C11,C13,C15,C17,C19,C21,C23,C25,C27,C29,C3,C31,C33,C35,C37,C39,C5,C7,C9})
+[C14,C16,C18,C20,C22,C24,C26,C28,C30,C32,C36,C38,C4,C40,C6,C8,C10]=vpasolve(eqn_2)
+
